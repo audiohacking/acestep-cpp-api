@@ -2,6 +2,8 @@
 
 [ACE-Step 1.5 HTTP API](https://github.com/ace-step/ACE-Step-1.5/blob/main/docs/en/API.md) emulator backed by **[acestep.cpp](https://github.com/audiohacking/acestep.cpp)** + **[Bun](https://bun.sh)**.
 
+→ **Full API reference**: [`docs/API.md`](docs/API.md)
+
 ## Bundled acestep.cpp (v0.0.3)
 
 `bun run build` downloads the correct asset from **[acestep.cpp releases v0.0.3](https://github.com/audiohacking/acestep.cpp/releases/tag/v0.0.3)** for the **current** OS/arch, installs them under `acestep-runtime/bin/`, compiles `dist/acestep-api`, then copies `acestep-runtime` next to the executable:
@@ -47,6 +49,44 @@ export ACESTEP_VAE_MODEL=vae-BF16.gguf
 ```
 
 Per-request `lm_model_path` and **`ACESTEP_MODEL_MAP`** values use the same resolution rules.
+
+## Multi-model support (GET /v1/models + per-request `model`)
+
+`GET /v1/models` **automatically scans `ACESTEP_MODELS_DIR`** for `.gguf` files and returns them as the available model list. No extra configuration is required.
+
+```bash
+export ACESTEP_MODELS_DIR="$HOME/models/acestep"
+# /v1/models will list every .gguf file found there, e.g.:
+# ["acestep-v15-turbo-Q8_0.gguf", "acestep-v15-turbo-shift3-Q8_0.gguf"]
+```
+
+Use the discovered filename as the `model` value per-request:
+
+```bash
+curl http://localhost:8001/v1/models   # discover available names
+
+curl -X POST http://localhost:8001/release_task \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt": "jazz piano trio", "model": "acestep-v15-turbo-shift3-Q8_0.gguf"}'
+```
+
+**Optional: logical names via `ACESTEP_MODEL_MAP`** — map friendly names to GGUF filenames:
+
+```bash
+export ACESTEP_MODELS_DIR="$HOME/models/acestep"
+export ACESTEP_MODEL_MAP='{"acestep-v15-turbo":"acestep-v15-turbo-Q8_0.gguf","acestep-v15-turbo-shift3":"acestep-v15-turbo-shift3-Q8_0.gguf"}'
+# Now use the short names: "model": "acestep-v15-turbo"
+```
+
+**Optional: `ACESTEP_MODELS` as a filter/gate** — restrict the list to a subset:
+
+```bash
+export ACESTEP_MODELS_DIR="$HOME/models/acestep"
+export ACESTEP_MODELS="acestep-v15-turbo-Q8_0.gguf,acestep-v15-turbo-shift3-Q8_0.gguf"
+# Only those two filenames appear in /v1/models even if more .gguf files exist
+```
+
+Generation parameters (`inference_steps`, `guidance_scale`, `bpm`, etc.) are **always per-request** and are never fixed by environment variables.
 
 ## Run (source)
 
@@ -97,7 +137,7 @@ Worker uses **`src_audio_path`** when set, otherwise **`reference_audio_path`**;
 
 ## API emulation notes
 
-See earlier revisions for full AceStep 1.5 route mapping. **`/format_input`** and **`/create_random_sample`** remain shape-compatible stubs (no separate LM HTTP service).
+See [`docs/API.md`](docs/API.md) for the full endpoint reference. **`/format_input`** and **`/create_random_sample`** are shape-compatible stubs (no separate LM HTTP service required).
 
 ## GitHub Actions
 
