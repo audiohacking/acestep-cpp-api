@@ -40,6 +40,8 @@ Optional: set backend URL in the DAW to **`http://127.0.0.1:<port>`** (no `/api`
 
 **Not supported here:** `task_type: stem_separation` (returns **501** — needs the full Python ACE-Step stack). **`/format_input`** / **`/create_random_sample`** remain stubs for API shape compatibility.
 
+**Building the DAW (no submodule edits):** **`bun run daw:build`** runs **`vite build`** inside **`ACE-Step-DAW/`** only. We intentionally do **not** run the submodule’s **`tsc -b`** step here, so vendored **ACE-Step-DAW** stays a pristine upstream checkout while still producing a usable **`dist/`** for this API server. For the full upstream pipeline (typecheck + Vite), run **`npm run build`** inside the submodule yourself when you need it.
+
 CLI usage matches the upstream [acestep.cpp README](https://github.com/audiohacking/acestep.cpp/blob/master/README.md): **MP3 by default** (128 kbps, overridable), **`--wav`** for stereo 48 kHz WAV, plus optional **`--lora`**, **`--lora-scale`**, **`--vae-chunk`**, **`--vae-overlap`**, **`--mp3-bitrate`**.
 
 ## Bundled acestep.cpp binaries (v0.0.3)

@@ -14,7 +14,7 @@
     "build:all": "bun run build && bun run build:windows",
     "test": "bun test ./test",
     "daw:install": "(cd ACE-Step-DAW && npm install)",
-    "daw:build": "(cd ACE-Step-DAW && npm install && npm run build)"
+    "daw:build": "(cd ACE-Step-DAW && npm install && npx vite build)"
   },
   "devDependencies": {
     "@types/bun": "latest"
