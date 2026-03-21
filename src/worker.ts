@@ -6,6 +6,7 @@ import * as store from "./store";
 import { mergeMetadata } from "./normalize";
 import { parseFormBoolean } from "./parseBool";
 import { resolveModelFile, resolveReferenceAudioPath, toAbsolutePath } from "./paths";
+import { clampRepaintingToSourceAudio } from "./repaintClamp";
 
 /** API body (snake_case / camelCase) -> acestep.cpp request JSON. */
 export function apiToRequestJson(body: Record<string, unknown>): Record<string, unknown> {
@@ -239,7 +240,15 @@ export async function runPipeline(taskId: string): Promise<void> {
 
   try {
     await mkdir(jobDir, { recursive: true });
+    const rawSrcForRepaint = String(body.src_audio_path ?? body.reference_audio_path ?? "").trim();
     const reqJson = apiToRequestJson(body);
+    if (rawSrcForRepaint) {
+      await clampRepaintingToSourceAudio(
+        reqJson,
+        toAbsolutePath(resolveReferenceAudioPath(rawSrcForRepaint)),
+        body
+      );
+    }
     await writeFile(requestPath, JSON.stringify(reqJson, null, 0));
 
     /** ace-lm: `--request <json> --lm <gguf>` per acestep.cpp README */
@@ -287,9 +296,8 @@ export async function runPipeline(taskId: string): Promise<void> {
     const wantWav = audioFmt === "wav";
 
     const synthArgs: string[] = [];
-    const rawSrc = String(body.src_audio_path ?? body.reference_audio_path ?? "").trim();
-    if (rawSrc) {
-      synthArgs.push("--src-audio", toAbsolutePath(resolveReferenceAudioPath(rawSrc)));
+    if (rawSrcForRepaint) {
+      synthArgs.push("--src-audio", toAbsolutePath(resolveReferenceAudioPath(rawSrcForRepaint)));
     }
     synthArgs.push("--request", ...numbered.map(toAbsolutePath));
     synthArgs.push(

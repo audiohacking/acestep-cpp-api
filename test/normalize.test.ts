@@ -15,24 +15,24 @@ describe("mergeMetadata", () => {
 });
 
 describe("normalizeRepaintingBounds", () => {
-  test("zeros when end equals start (acestep rejects end <= start)", () => {
+  test("clears to -1 when end equals start", () => {
     const b = normalizeRepaintingBounds({
       repainting_start: 0.1,
       repainting_end: 0.1,
     });
-    expect(b.repainting_start).toBe(0);
-    expect(b.repainting_end).toBe(0);
-    expect(b.repaintingStart).toBe(0);
-    expect(b.repaintingEnd).toBe(0);
+    expect(b.repainting_start).toBe(-1);
+    expect(b.repainting_end).toBe(-1);
+    expect(b.repaintingStart).toBe(-1);
+    expect(b.repaintingEnd).toBe(-1);
   });
 
-  test("zeros when end < start", () => {
+  test("clears to -1 when end < start", () => {
     const b = normalizeRepaintingBounds({
       repainting_start: 0.5,
       repainting_end: 0.2,
     });
-    expect(b.repainting_start).toBe(0);
-    expect(b.repainting_end).toBe(0);
+    expect(b.repainting_start).toBe(-1);
+    expect(b.repainting_end).toBe(-1);
   });
 
   test("leaves valid range unchanged", () => {

@@ -1,6 +1,7 @@
 /**
- * acestep.cpp rejects repaint when repainting_end <= repainting_start.
- * If both bounds are set and invalid, reset to 0/0 (auto / full-track behavior per API convention).
+ * acestep.cpp rejects repaint when repainting_end <= repainting_start (in resolved seconds).
+ * If both bounds are set in the request and end <= start, clear to **-1** (ace-synth “unset” default).
+ * DAW beat vs second mismatches on short audio are fixed in `clampRepaintingToSourceAudio` (worker).
  */
 export function normalizeRepaintingBounds(body: Record<string, unknown>): Record<string, unknown> {
   const toNum = (v: unknown): number | null => {
@@ -12,10 +13,10 @@ export function normalizeRepaintingBounds(body: Record<string, unknown>): Record
   const re = toNum(body.repainting_end ?? body.repaintingEnd);
   if (rs == null || re == null) return body;
   if (re <= rs) {
-    body.repainting_start = 0;
-    body.repainting_end = 0;
-    body.repaintingStart = 0;
-    body.repaintingEnd = 0;
+    body.repainting_start = -1;
+    body.repainting_end = -1;
+    body.repaintingStart = -1;
+    body.repaintingEnd = -1;
   }
   return body;
 }

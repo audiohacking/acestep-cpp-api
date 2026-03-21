@@ -169,7 +169,7 @@ If **`task_type`** is `cover`, `repaint`, or `lego` and neither a path nor an up
 
 Worker uses **`src_audio_path`** when set, otherwise **`reference_audio_path`**; a single `--src-audio` is passed to ace-synth. Request JSON already supports **`audio_cover_strength`**, **`repainting_start`** / **`repainting_end`**, and **`lego`** (track name) per [acestep.cpp README](https://github.com/audiohacking/acestep.cpp/blob/master/README.md).
 
-**Repaint bounds:** if both **`repainting_start`** and **`repainting_end`** are set and **`repainting_end` ≤ `repainting_start`** (ace-synth would error), the API normalizes both to **`0`** (auto / full-track) before enqueue.
+**Repaint bounds:** (1) If both are set and **`repainting_end` ≤ `repainting_start`**, they are cleared to **`-1`** before enqueue. (2) When **`--src-audio`** is a **WAV**, the worker measures its duration and reclamps repaint to **seconds on that file**; values larger than the file length are treated as **beats** using **`bpm`**, then clamped. If the window still collapses (**`end` ≤ `start`**), both are set to **`-1`** so ace-synth does not error on short context clips.
 
 ## API emulation notes
 
