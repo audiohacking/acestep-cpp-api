@@ -230,7 +230,7 @@ See [`docs/API.md`](docs/API.md) for the full endpoint reference. **`/format_inp
 
 | Workflow | Trigger | What it does |
 |----------|---------|----------------|
-| **[CI](.github/workflows/ci.yml)** | Pull requests & pushes to `main` / `master` | `bun test`, bundle acestep v0.0.3 runtime, compile binary on **Ubuntu**, **macOS (arm64)**, **Windows** |
+| **[CI](.github/workflows/ci.yml)** | Pull requests & pushes to `main` / `master` | `bun run test` (`./test` only), bundle acestep v0.0.3 runtime, compile binary on **Ubuntu**, **macOS (arm64)**, **Windows** |
 | **[Release](.github/workflows/release.yml)** | **Published releases** & manual `workflow_dispatch` | Same builds, produces `acestep-api-<tag>-linux-x64.tar.gz`, `…-macos-arm64.tar.gz`, `…-windows-x64.zip` (binary + `acestep-runtime/` when present). On **release published**, uploads those archives to the GitHub Release. |
 
 Manual runs (`workflow_dispatch`) build artifacts attached to the workflow run only (not to a draft release).
