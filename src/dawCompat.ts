@@ -44,7 +44,7 @@ export function initModelResponse(body: Record<string, unknown>) {
 
   return {
     message:
-      "acestep-cpp-api: DiT/LM paths are configured via environment variables; this endpoint is a no-op for UI compatibility.",
+      "acestep-cpp-api: DiT/LM paths come from ACESTEP_* env vars and/or scanning ACESTEP_MODELS_DIR; this endpoint is a no-op for UI compatibility.",
     loaded_model: model,
     loaded_lm_model: initLlm || lmConfigured ? lmName : null,
     models,

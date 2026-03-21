@@ -14,19 +14,31 @@ git clone --recurse-submodules <repo-url>
 git submodule update --init --recursive
 ```
 
-**Demo (DAW UI + API):** point **`ACESTEP_MODELS_DIR`** at the folder that contains your GGUF files, set the usual model filenames (same as [Models directory](#models-directory-always-via-env) below), bundle binaries once, build the DAW, then start:
+**Demo (DAW UI + API):** set **`ACESTEP_MODELS_DIR`** to a folder containing the usual Hugging Face / acestep.cpp **`.gguf`** files (flat directory). The server **auto-detects** LM, embedding, VAE, DiT **base**, DiT **turbo**, and turbo+**shift** by filename (see [Models directory](#models-directory-always-via-env)). You can still override any path with **`ACESTEP_LM_MODEL`**, etc. Then bundle binaries, build the DAW, start:
 
 ```bash
 export ACESTEP_MODELS_DIR="$HOME/models/acestep"
-export ACESTEP_LM_MODEL=acestep-5Hz-lm-4B-Q8_0.gguf
-export ACESTEP_EMBEDDING_MODEL=Qwen3-Embedding-0.6B-Q8_0.gguf
-export ACESTEP_DIT_MODEL=acestep-v15-turbo-Q8_0.gguf
-export ACESTEP_VAE_MODEL=vae-BF16.gguf
 bun run bundle:acestep   # once per machine: fetch ace-lm / ace-synth
 bun run daw:build
 bun run start
-# Open http://127.0.0.1:<port>/  (default port from env / config)
+# Startup logs list scanned roles + effective paths.
 ```
+
+### How to open the DAW UI
+
+The API and the built DAW share **one HTTP server**. There is no separate “DAW port.”
+
+1. **`bun run daw:build`** must have run successfully so **`ACE-Step-DAW/dist/index.html`** exists (the log line `ACE-Step-DAW static (if built): …` should point at that folder).
+2. Start the server (**`bun run start`** or **`bun run src/index.ts`**).
+3. In a browser open the **root URL** of that server — by default:
+
+   **http://127.0.0.1:8001/**
+
+   If you set **`ACESTEP_API_HOST`** / **`ACESTEP_API_PORT`**, use those instead (e.g. `http://127.0.0.1:9000/`).
+
+The server serves the Vite **`dist/`** for ordinary **`GET`** requests (e.g. `/`, `/assets/…`). Deep links to client routes still work because unknown paths fall back to **`index.html`**.
+
+If **`GET /`** returns JSON **`Not Found`**, `dist/` is missing or empty — run **`bun run daw:build`** again or set **`ACESTEP_DAW_DIST`** to a folder that contains a production **`index.html`**.
 
 Static files are served from `ACE-Step-DAW/dist` unless you override **`ACESTEP_DAW_DIST`**.
 
@@ -70,40 +82,47 @@ Override layout with **`ACESTEP_APP_ROOT`** (directory that should contain `aces
 
 ## Models directory (always via env)
 
-GGUF paths can be **absolute**, **relative to the app root** (`./models/...`), or **bare filenames** resolved under a models directory:
+Set **`ACESTEP_MODELS_DIR`** (or **`ACESTEP_MODEL_PATH`** / **`MODELS_DIR`**) to a directory containing **`.gguf`** files. The API **scans that directory** (non-recursive) and assigns:
 
-| Variable | Purpose |
-|----------|---------|
-| **`ACESTEP_MODELS_DIR`** | Base directory for default LM / embedding / DiT / VAE **filenames** |
-| **`ACESTEP_MODEL_PATH`** | Alias (same as above) |
-| **`MODELS_DIR`** | Extra alias |
+| Detected role | Typical filename hints |
+|---------------|-------------------------|
+| **LM (5Hz)** | `*5Hz*lm*` / acestep LM gguf |
+| **Embedding** | `*Embedding*` (e.g. Qwen3-Embedding) |
+| **VAE** | `*vae*` (excluding embedding) |
+| **DiT base** | `*v15-base*` — **required for [lego mode](https://github.com/audiohacking/acestep.cpp/blob/master/examples/lego.sh)** (turbo does not support lego) |
+| **DiT turbo** | `*v15-turbo*` without `shift` |
+| **DiT turbo + shift** | `*v15-turbo*` with `shift` |
 
-Example (paths from [Hugging Face ACE-Step-1.5-GGUF](https://huggingface.co/Serveurperso/ACE-Step-1.5-GGUF)):
+**Overrides (optional):** if set, these win over scan — **`ACESTEP_LM_MODEL`**, **`ACESTEP_EMBEDDING_MODEL`**, **`ACESTEP_DIT_MODEL`**, **`ACESTEP_VAE_MODEL`**. Paths can be **absolute**, **relative to app root**, or **basenames** under the models directory.
+
+**Logical DiT names** (for `model` / DAW picker): auto-filled from scan into **`ACESTEP_MODEL_MAP`** unless you pass your own JSON in **`ACESTEP_MODEL_MAP`**: `acestep-v15-base`, `acestep-v15-turbo`, `acestep-v15-turbo-shift3`.
+
+- **Default logical model:** **`acestep-v15-base`** (lego-safe). Override with **`ACESTEP_DEFAULT_MODEL`**.
+- **Default `model` when none selected:** resolves to **base** DiT if present, else turbo.
+- **`task_type: lego`:** always uses **base** DiT, matching [examples/lego.sh](https://github.com/audiohacking/acestep.cpp/blob/master/examples/lego.sh) (phase 2). Request JSON defaults for lego follow [examples/lego.json](https://github.com/audiohacking/acestep.cpp/blob/master/examples/lego.json): **inference_steps 50**, **guidance_scale 1.0**, **shift 1.0** when the client omits them.
+
+Explicit example (same files as [Hugging Face ACE-Step-1.5-GGUF](https://huggingface.co/Serveurperso/ACE-Step-1.5-GGUF)) — optional if autodetect already finds them:
 
 ```bash
 export ACESTEP_MODELS_DIR="$HOME/models/acestep"
 export ACESTEP_LM_MODEL=acestep-5Hz-lm-4B-Q8_0.gguf
 export ACESTEP_EMBEDDING_MODEL=Qwen3-Embedding-0.6B-Q8_0.gguf
-export ACESTEP_DIT_MODEL=acestep-v15-turbo-Q8_0.gguf
+export ACESTEP_DIT_MODEL=acestep-v15-base-Q8_0.gguf   # optional; scan prefers base as default DiT
 export ACESTEP_VAE_MODEL=vae-BF16.gguf
 ```
 
-Per-request `lm_model_path` and **`ACESTEP_MODEL_MAP`** values use the same resolution rules.
+Per-request **`lm_model_path`** and **`ACESTEP_MODEL_MAP`** still use the same path resolution rules.
 
 ## Run (source)
 
 ```bash
 bun install
 bun run bundle:acestep   # once: fetch v0.0.3 binaries for this machine
-export ACESTEP_MODELS_DIR="$HOME/models/acestep"
-export ACESTEP_LM_MODEL=acestep-5Hz-lm-4B-Q8_0.gguf
-export ACESTEP_EMBEDDING_MODEL=Qwen3-Embedding-0.6B-Q8_0.gguf
-export ACESTEP_DIT_MODEL=acestep-v15-turbo-Q8_0.gguf
-export ACESTEP_VAE_MODEL=vae-BF16.gguf
+export ACESTEP_MODELS_DIR="$HOME/models/acestep"   # drop-in GGUFs; roles autodetected
 bun run start
 ```
 
-Change **`ACESTEP_MODELS_DIR`** to your real models directory; filenames must exist under that path (or use absolute paths in the `ACESTEP_*_MODEL` vars per [Models directory](#models-directory-always-via-env)).
+Add **`ACESTEP_*_MODEL`** overrides only if a file is not detected. For lego, ensure a **`*v15-base*.gguf`** is in that folder (or map it — see [Models directory](#models-directory-always-via-env)).
 
 ## Build
 
@@ -122,6 +141,16 @@ bun run build:binary-only # compile only (reuse existing acestep-runtime/)
 | `ACESTEP_VAE_CHUNK` / `ACESTEP_VAE_OVERLAP` | `--vae-chunk` / `--vae-overlap` |
 
 API `audio_format: "wav"` adds **`--wav`** (no `--mp3-bitrate`).
+
+## Generation / subprocess logs
+
+While a task runs, **`ace-lm`** and **`ace-synth`** **stdout/stderr** are forwarded to the **same terminal** as the API server (each line is interleaved with Bun logs). The server also logs one line per task with parsed flags: `thinking`, `use_format`, `sample_mode`, `needLm`, `lmConfigured`.
+
+| Variable | Purpose |
+|----------|---------|
+| **`ACESTEP_QUIET_SUBPROCESS`** | Set to **`1`** to stop inheriting child output (logs are captured only on failure; use for CI or noisy runs). |
+
+**DAW + multipart note:** form fields like `thinking=false` arrive as the string **`"false"`**. The API parses those explicitly so **`"false"` does not enable** the LM path (unlike `Boolean("false")` in JavaScript).
 
 ## Reference / source audio (cover, repaint, lego)
 

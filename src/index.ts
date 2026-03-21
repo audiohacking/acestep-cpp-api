@@ -1,6 +1,6 @@
 import { mkdir } from "fs/promises";
 import { join } from "path";
-import { config } from "./config";
+import { config, describeModelAutoconfig } from "./config";
 import { requireAuth } from "./auth";
 import { jsonRes } from "./res";
 import { detailRes } from "./detail";
@@ -11,6 +11,7 @@ import { mergeMetadata, parseParamObj } from "./normalize";
 import { normalizeDawBody } from "./dawNormalize";
 import { modelInventoryData, initModelResponse } from "./dawCompat";
 import { tryServeDawStatic, dawDistRoot } from "./dawStatic";
+import { parseFormBoolean } from "./parseBool";
 
 const AUDIO_PATH_PREFIX = "/";
 
@@ -282,7 +283,7 @@ async function handle(req: Request): Promise<Response> {
       );
     }
 
-    const sampleMode = Boolean(body.sample_mode ?? body.sampleMode);
+    const sampleMode = parseFormBoolean(body.sample_mode ?? body.sampleMode, false);
     if (!hasTextPrompt(body) && !sampleMode) {
       return detailRes("prompt, caption, or sample_query is required (or enable sample_mode)", 400);
     }
@@ -413,5 +414,13 @@ const server = Bun.serve({
 
 console.log(`acestep-cpp-api listening on http://${server.hostname}:${server.port}`);
 console.log(`  acestep binaries: ${config.acestepBinDir}`);
-if (config.modelsDir) console.log(`  ACESTEP_MODELS_DIR: ${config.modelsDir}`);
+for (const line of describeModelAutoconfig()) console.log(line);
+if (config.modelsDir) {
+  console.log(`  Effective LM path:        ${config.lmModelPath || "(none)"}`);
+  console.log(`  Effective embedding path: ${config.embeddingModelPath || "(none)"}`);
+  console.log(`  Effective DiT (default):  ${config.ditModelPath || "(none)"}`);
+  console.log(`  Effective VAE path:       ${config.vaeModelPath || "(none)"}`);
+  console.log(`  Lego DiT (base):          ${config.legoDitPath || "(none)"}`);
+  console.log(`  Logical models:           ${config.modelsList.join(", ")}`);
+}
 console.log(`  ACE-Step-DAW static (if built): ${dawDistRoot()}`);
