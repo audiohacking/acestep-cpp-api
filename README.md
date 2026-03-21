@@ -10,6 +10,8 @@
 
 This repo includes **[ACE-Step-DAW](https://github.com/ace-step/ACE-Step-DAW)** as a **git submodule** at `ACE-Step-DAW/`.
 
+> **Do not commit fixes inside the submodule.** This project **does not** ship submodule changes — work under `ACE-Step-DAW/` is **lost** on clone/CI. Implement DAW/API compatibility in **`src/`** (and docs/tests here). See **[`AGENTS.md`](AGENTS.md)**.
+
 Clone with the **ACE-Step-DAW** submodule (one level only — do **not** use `--recursive` here; upstream DAW may reference optional nested submodules without public URLs):
 
 ```bash
@@ -58,7 +60,7 @@ Optional: set backend URL in the DAW to **`http://127.0.0.1:<port>`** (no `/api`
 
 **DAW → acestep.cpp mapping:** The bundled DAW sends the same fields as the upstream Python API (FormData + project defaults). This server **normalizes** several mismatches for `lego` (e.g. turbo-style **`guidance_scale` / `shift` / `inference_steps`** are rewritten to the acestep.cpp **lego/base** profile; empty **`prompt`** no longer hides **`caption`**; **sub‑0.5s** repaint windows are collapsed). See **[`docs/API.md`](docs/API.md)** (`lego_client_diffusion`, `ACESTEP_LEGO_CLIENT_DIFFUSION`).
 
-**Building the DAW (no submodule edits):** **`bun run daw:build`** runs **`vite build`** inside **`ACE-Step-DAW/`** only. We intentionally do **not** run the submodule’s **`tsc -b`** step here, so vendored **ACE-Step-DAW** stays a pristine upstream checkout while still producing a usable **`dist/`** for this API server. For the full upstream pipeline (typecheck + Vite), run **`npm run build`** inside the submodule yourself when you need it.
+**Building the DAW (no submodule edits):** **`bun run daw:build`** runs **`vite build`** inside **`ACE-Step-DAW/`** only. We intentionally do **not** run the submodule’s **`tsc -b`** step here, so vendored **ACE-Step-DAW** stays a pristine upstream checkout while still producing a usable **`dist/`** for this API server. **Never rely on local edits under `ACE-Step-DAW/`** for product behavior — they are not part of this repository. For the full upstream pipeline (typecheck + Vite), run **`npm run build`** inside the submodule yourself when you need it (that does not change what we ship).
 
 CLI usage matches the upstream [acestep.cpp README](https://github.com/audiohacking/acestep.cpp/blob/master/README.md): **MP3 by default** (128 kbps, overridable), **`--wav`** for stereo 48 kHz WAV, plus optional **`--lora`**, **`--lora-scale`**, **`--vae-chunk`**, **`--vae-overlap`**, **`--mp3-bitrate`**.
 
