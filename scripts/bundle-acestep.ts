@@ -1,14 +1,15 @@
 #!/usr/bin/env bun
 /**
  * Downloads acestep.cpp v0.0.3 release binaries for the current OS/arch and
- * installs **every file** from the archive into a **single directory**:
- * `<repo>/acestep-runtime/bin/` (flat — executables, .dylib/.so/.dll, and any
- * other payload; no lib/ subtree or nested bin/).
+ * installs the **full archive** into a **single flat directory**:
+ * `<repo>/acestep-runtime/bin/` (every file by basename — ace-lm, ace-synth,
+ * ace-server, ace-understand, neural-codec, mp3-codec, quantize, and all
+ * shared libraries; no nested lib/ tree).
  *
  * @see https://github.com/audiohacking/acestep.cpp/releases/tag/v0.0.3
  * @see https://github.com/audiohacking/acestep.cpp/blob/master/README.md
  */
-import { mkdir, readdir, chmod, rm, copyFile } from "fs/promises";
+import { mkdir, readdir, chmod, rm, copyFile, stat } from "fs/promises";
 import { join, dirname, basename } from "path";
 import { existsSync } from "fs";
 
@@ -139,9 +140,11 @@ async function main() {
   const n = await flattenIntoBin(packageRoot, outBin);
 
   if (process.platform !== "win32") {
-    for (const name of [wantLm, wantSynth]) {
+    for (const name of await readdir(outBin)) {
+      if (name.endsWith(".a")) continue;
       const p = join(outBin, name);
-      if (existsSync(p)) await chmod(p, 0o755);
+      const st = await stat(p).catch(() => null);
+      if (st?.isFile()) await chmod(p, 0o755);
     }
   }
 

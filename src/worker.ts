@@ -1,11 +1,11 @@
 import { randomUUID } from "crypto";
-import { mkdir, writeFile, rename, unlink, readdir, readFile } from "fs/promises";
-import { join } from "path";
+import { mkdir, writeFile, rename, rm, readdir, readFile } from "fs/promises";
+import { join, resolve } from "path";
 import { config } from "./config";
 import * as store from "./store";
 import { mergeMetadata } from "./normalize";
 import { parseFormBoolean } from "./parseBool";
-import { resolveModelFile, resolveReferenceAudioPath, toAbsolutePath } from "./paths";
+import { resolveModelFile, resolveReferenceAudioPath, toAbsolutePath, isPathWithin } from "./paths";
 import { clampRepaintingToSourceAudio } from "./repaintClamp";
 
 /** API body (snake_case / camelCase) -> acestep.cpp request JSON. */
@@ -113,7 +113,16 @@ export function shouldRunAceLm(body: Record<string, unknown>, reqJson: Record<st
 
 export function resolveLmPath(body: Record<string, unknown>): string {
   const p = body.lm_model_path ?? body.lmModelPath;
-  if (typeof p === "string" && p.trim()) return resolveModelFile(p.trim());
+  if (typeof p === "string" && p.trim()) {
+    const resolved = resolveModelFile(p.trim());
+    const dir = config.modelsDir;
+    if (dir && !isPathWithin(resolved, dir)) {
+      throw new Error(
+        `lm_model_path is not within the configured models directory`
+      );
+    }
+    return resolved;
+  }
   return config.lmModelPath;
 }
 
@@ -129,10 +138,14 @@ export function resolveDitPath(body: Record<string, unknown>): string {
   }
 
   const modelName = typeof body.model === "string" ? body.model.trim() : "";
-  if (modelName && config.modelMap[modelName]) return config.modelMap[modelName];
-  if (modelName && !config.modelMap[modelName]) {
-    const known = Object.keys(config.modelMap).join(", ") || "(none — check ACESTEP_MODELS_DIR scan)";
-    throw new Error(`Unknown model "${modelName}". Known logical names: ${known}`);
+  if (modelName) {
+    if (config.modelMap[modelName]) return config.modelMap[modelName];
+    const scanned = config.scannedModelMap;
+    if (scanned[modelName]) return scanned[modelName];
+    const known = [...Object.keys(config.modelMap), ...Object.keys(scanned)].sort().join(", ") || "(none)";
+    throw new Error(
+      `Unknown model "${modelName}". Known: ${known}. Use GET /v1/models to list available models.`
+    );
   }
   if (!config.ditModelPath) {
     throw new Error(
@@ -297,7 +310,14 @@ export async function runPipeline(taskId: string): Promise<void> {
 
     const synthArgs: string[] = [];
     if (rawSrcForRepaint) {
-      synthArgs.push("--src-audio", toAbsolutePath(resolveReferenceAudioPath(rawSrcForRepaint)));
+      const resolvedSrc = resolveReferenceAudioPath(rawSrcForRepaint);
+      if (
+        !isPathWithin(resolvedSrc, resolve(config.tmpDir)) &&
+        !isPathWithin(resolvedSrc, resolve(config.audioStorageDir))
+      ) {
+        throw new Error("Source audio path must be within the configured storage directories");
+      }
+      synthArgs.push("--src-audio", toAbsolutePath(resolvedSrc));
     }
     synthArgs.push("--request", ...numbered.map(toAbsolutePath));
     synthArgs.push(
@@ -412,14 +432,7 @@ export async function runPipeline(taskId: string): Promise<void> {
     store.setTaskFailed(taskId, msg, JSON.stringify([failItem]));
   } finally {
     store.recordJobDuration(Date.now() - started);
-    try {
-      const entries = await readdir(jobDir).catch(() => []);
-      for (const e of entries) {
-        await unlink(join(jobDir, e)).catch(() => {});
-      }
-    } catch {
-      // ignore
-    }
+    await rm(jobDir, { recursive: true, force: true }).catch(() => {});
   }
 }
 

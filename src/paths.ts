@@ -1,5 +1,5 @@
-import { existsSync } from "fs";
-import { dirname, join, resolve, isAbsolute } from "path";
+import { existsSync, readdirSync } from "fs";
+import { dirname, join, resolve, isAbsolute, sep } from "path";
 
 /**
  * Root used to resolve `acestep-runtime/` and default paths.
@@ -84,4 +84,33 @@ export function resolveReferenceAudioPath(pathOrName: string): string {
   if (!p) return p;
   if (isAbsolute(p)) return p;
   return join(resolve(getResourceRoot()), p);
+}
+
+/**
+ * Returns true when `child` is equal to `parent` or is strictly inside it.
+ * Both paths are resolved to absolute form before comparison so relative
+ * segments, symlink-safe strings, and double-slashes are all normalized.
+ */
+export function isPathWithin(child: string, parent: string): boolean {
+  const resolvedChild = resolve(child);
+  const resolvedParent = resolve(parent);
+  return (
+    resolvedChild === resolvedParent ||
+    resolvedChild.startsWith(resolvedParent + sep)
+  );
+}
+
+/**
+ * Returns basenames of `.gguf` files found in `dir`, sorted alphabetically.
+ * Returns `[]` if `dir` is empty, does not exist, or cannot be read.
+ */
+export function listGgufFiles(dir: string): string[] {
+  if (!dir) return [];
+  try {
+    return readdirSync(dir)
+      .filter((f) => f.toLowerCase().endsWith(".gguf"))
+      .sort();
+  } catch {
+    return [];
+  }
 }

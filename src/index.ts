@@ -1,5 +1,6 @@
 import { mkdir } from "fs/promises";
-import { join } from "path";
+import { join, resolve } from "path";
+import { existsSync } from "fs";
 import { config, describeModelAutoconfig } from "./config";
 import { requireAuth } from "./auth";
 import { jsonRes } from "./res";
@@ -12,8 +13,28 @@ import { normalizeDawBody } from "./dawNormalize";
 import { modelInventoryData, initModelResponse } from "./dawCompat";
 import { tryServeDawStatic, dawDistRoot } from "./dawStatic";
 import { parseFormBoolean } from "./parseBool";
+import { isPathWithin } from "./paths";
 
 const AUDIO_PATH_PREFIX = "/";
+
+/** Run ace-synth with no arguments to confirm the binary is present and executable. */
+async function probeAceSynth(): Promise<{ ok: boolean; path: string; hint: string }> {
+  const binDir = config.acestepBinDir;
+  const bin = join(binDir, process.platform === "win32" ? "ace-synth.exe" : "ace-synth");
+  if (!existsSync(bin)) {
+    return { ok: false, path: bin, hint: "binary not found" };
+  }
+  try {
+    const proc = Bun.spawn([bin], { stdout: "pipe", stderr: "pipe" });
+    const [stdout, stderr] = await Promise.all([proc.stdout.text(), proc.stderr.text()]);
+    await proc.exited;
+    // ace-synth prints usage and exits non-zero when run with no arguments — that is expected.
+    const out = (stdout + stderr).trim();
+    return { ok: true, path: bin, hint: out.slice(0, 300) || "ok" };
+  } catch (e) {
+    return { ok: false, path: bin, hint: e instanceof Error ? e.message : String(e) };
+  }
+}
 
 function parsePath(pathParam: string): string {
   const decoded = decodeURIComponent(pathParam);
@@ -178,6 +199,7 @@ async function handle(req: Request): Promise<Response> {
     const authErr = requireAuth(req.headers.get("Authorization"), undefined);
     if (authErr) return authErr;
     const lm = Boolean(config.lmModelPath?.trim());
+    const probe = await probeAceSynth();
     return jsonRes({
       status: "ok",
       service: "ACE-Step API",
@@ -186,6 +208,9 @@ async function handle(req: Request): Promise<Response> {
       llm_initialized: lm,
       loaded_model: config.defaultModel,
       loaded_lm_model: lm ? config.lmModelPath : null,
+      binary: probe.ok ? "ok" : "unavailable",
+      binary_path: probe.path,
+      binary_hint: probe.hint,
     });
   }
 
@@ -231,12 +256,15 @@ async function handle(req: Request): Promise<Response> {
     if (authErr) return authErr;
     const pathParam = url.searchParams.get("path");
     if (!pathParam) return detailRes("path required", 400);
-    const safePath = parsePath(pathParam).replace(/\.\./g, "").replace(/^\/+/, "");
-    const filePath = join(config.audioStorageDir, safePath);
+    const requestedPath = parsePath(pathParam).replace(/^\/+/, "");
+    const filePath = resolve(join(config.audioStorageDir, requestedPath));
+    if (!isPathWithin(filePath, config.audioStorageDir)) {
+      return detailRes("Not Found", 404);
+    }
     try {
       const file = Bun.file(filePath);
       if (!(await file.exists())) return detailRes("Not Found", 404);
-      const ext = safePath.endsWith(".wav") ? "wav" : safePath.endsWith(".flac") ? "flac" : "mp3";
+      const ext = filePath.endsWith(".wav") ? "wav" : filePath.endsWith(".flac") ? "flac" : "mp3";
       const mime =
         ext === "wav" ? "audio/wav" : ext === "flac" ? "audio/flac" : "audio/mpeg";
       return new Response(file, {
