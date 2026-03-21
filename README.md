@@ -1,13 +1,12 @@
-# acestep-cpp-api
+# acestep-cpp-api for Acestep DAW
 
 [ACE-Step 1.5 HTTP API](https://github.com/ace-step/ACE-Step-1.5/blob/main/docs/en/API.md) emulator backed by **[acestep.cpp](https://github.com/audiohacking/acestep.cpp)** + **[Bun](https://bun.sh)**.
 
 → **Full API reference**: [`docs/API.md`](docs/API.md)
 
-## ACE-Step-DAW (submodule + same-origin UI) for Acestep.cpp
+## ACE-Step-DAW (submodule) for Acestep.cpp
 
 ![acestep-daw-demo1-ezgif com-optimize](https://github.com/user-attachments/assets/d6a3426c-50c4-47a9-90c7-be6479c40bae)
-
 
 This repo includes **[ACE-Step-DAW](https://github.com/ace-step/ACE-Step-DAW)** as a **git submodule** at `ACE-Step-DAW/`.
 
