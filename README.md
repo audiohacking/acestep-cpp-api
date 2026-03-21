@@ -4,7 +4,9 @@
 
 → **Full API reference**: [`docs/API.md`](docs/API.md)
 
-## ACE-Step-DAW (submodule + same-origin UI)
+## ACE-Step-DAW (submodule + same-origin UI) for Acestep.cpp
+
+![acestep-daw-demo-ezgif com-video-to-gif-converter](https://github.com/user-attachments/assets/1ef3a031-8a84-4bee-8a29-567f620ffa59)
 
 This repo includes **[ACE-Step-DAW](https://github.com/ace-step/ACE-Step-DAW)** as a **git submodule** at `ACE-Step-DAW/`.
 
