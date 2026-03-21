@@ -1,0 +1,138 @@
+# Build distributables for Linux, macOS (arm64), and Windows; attach to GitHub Releases.
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: linux-x64
+            outfile: dist/acestep-api
+            binary: dist/acestep-api
+            archive: tar
+          - os: macos-latest
+            label: macos-arm64
+            outfile: dist/acestep-api
+            binary: dist/acestep-api
+            archive: tar
+          - os: windows-latest
+            label: windows-x64
+            outfile: dist/acestep-api.exe
+            binary: dist/acestep-api.exe
+            archive: zip
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Bundle acestep.cpp runtime (v0.0.3)
+        run: bun run bundle:acestep
+
+      - name: Create dist directory
+        shell: bash
+        run: mkdir -p dist
+
+      - name: Compile standalone binary
+        run: bun build ./src/index.ts --compile --minify --sourcemap=external --outfile ${{ matrix.outfile }}
+
+      - name: Sync acestep-runtime next to binary
+        run: bun run sync:runtime
+
+      - name: Verify binary exists
+        shell: bash
+        run: test -f "${{ matrix.binary }}"
+
+      - name: Package (tar.gz)
+        id: pack-tar
+        if: matrix.archive == 'tar'
+        shell: bash
+        env:
+          VERSION: ${{ github.event.release.tag_name || github.ref_name }}
+        run: |
+          NAME="acestep-api-${VERSION}-${{ matrix.label }}"
+          mkdir -p "pack/${NAME}"
+          if [ -d dist/acestep-runtime ]; then cp -R dist/acestep-runtime "pack/${NAME}/"; fi
+          cp "${{ matrix.binary }}" "pack/${NAME}/"
+          (cd pack && tar -czvf "../${NAME}.tar.gz" "${NAME}")
+          echo "asset=${NAME}.tar.gz" >> "$GITHUB_OUTPUT"
+          ls -la "${NAME}.tar.gz"
+
+      - name: Package (zip)
+        id: pack-zip
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        env:
+          VERSION: ${{ github.event.release.tag_name || github.ref_name }}
+        run: |
+          $label = '${{ matrix.label }}'
+          $name = "acestep-api-$env:VERSION-$label"
+          New-Item -ItemType Directory -Force -Path "pack/$name" | Out-Null
+          if (Test-Path dist/acestep-runtime) { Copy-Item -Recurse dist/acestep-runtime "pack/$name/" }
+          Copy-Item "${{ matrix.binary }}" "pack/$name/"
+          Compress-Archive -Path "pack/$name" -DestinationPath "$name.zip" -Force
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "asset=$name.zip"
+          Get-Item "$name.zip"
+
+      - name: Upload artifact (tar)
+        if: matrix.archive == 'tar'
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.label }}
+          path: ${{ steps.pack-tar.outputs.asset }}
+          if-no-files-found: error
+
+      - name: Upload artifact (zip)
+        if: matrix.archive == 'zip'
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.label }}
+          path: ${{ steps.pack-zip.outputs.asset }}
+          if-no-files-found: error
+
+  attach-to-release:
+    name: Upload release assets
+    needs: build
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: package-*
+          path: downloaded
+          merge-multiple: true
+
+      - name: Flatten assets for upload
+        shell: bash
+        run: |
+          mkdir -p flat
+          find downloaded -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec cp -v {} flat/ \;
+          ls -la flat/
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: flat/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

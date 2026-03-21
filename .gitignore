@@ -1,0 +1,8 @@
+node_modules/
+dist/
+storage/
+acestep-bin/
+acestep-runtime/
+bundled/
+*.log
+.DS_Store

@@ -1,0 +1,62 @@
+# Tests and compile smoke check on every PR and push to main.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-build:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            outfile: dist/acestep-api
+            binary: dist/acestep-api
+          - os: macos-latest
+            outfile: dist/acestep-api
+            binary: dist/acestep-api
+          - os: windows-latest
+            outfile: dist/acestep-api.exe
+            binary: dist/acestep-api.exe
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Unit tests
+        run: bun test
+
+      - name: Bundle acestep.cpp runtime (v0.0.3)
+        run: bun run bundle:acestep
+
+      - name: Create dist directory
+        shell: bash
+        run: mkdir -p dist
+
+      - name: Compile standalone binary
+        run: bun build ./src/index.ts --compile --minify --sourcemap=external --outfile ${{ matrix.outfile }}
+
+      - name: Sync acestep-runtime next to binary
+        run: bun run sync:runtime
+
+      - name: Verify binary exists
+        shell: bash
+        run: test -f "${{ matrix.binary }}"
