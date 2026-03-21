@@ -1,4 +1,5 @@
 import { existsSync, readdirSync } from "fs";
+import { rm, readdir } from "fs/promises";
 import { dirname, join, resolve, isAbsolute, sep } from "path";
 
 /**
@@ -98,6 +99,40 @@ export function isPathWithin(child: string, parent: string): boolean {
     resolvedChild === resolvedParent ||
     resolvedChild.startsWith(resolvedParent + sep)
   );
+}
+
+/**
+ * Remove `path` only if it lies under `parent` (after resolve). Prevents accidental deletes outside tmp/storage.
+ */
+export async function removePathIfUnder(path: string, parent: string): Promise<void> {
+  const resolved = resolve(path);
+  if (!isPathWithin(resolved, resolve(parent))) return;
+  await rm(resolved, { recursive: true, force: true }).catch(() => {});
+}
+
+/**
+ * Remove immediate child directories of `tmpRoot` that are empty (leftover failed /release_task validation).
+ * Safe to run at startup; does not recurse into non-empty dirs.
+ */
+export async function sweepEmptyDirsInTmp(tmpRoot: string): Promise<void> {
+  let entries: Awaited<ReturnType<typeof readdir>>;
+  try {
+    entries = await readdir(tmpRoot, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const e of entries) {
+    if (!e.isDirectory()) continue;
+    const full = join(tmpRoot, e.name);
+    try {
+      const inner = await readdir(full);
+      if (inner.length === 0) {
+        await rm(full, { recursive: true, force: true }).catch(() => {});
+      }
+    } catch {
+      // ignore
+    }
+  }
 }
 
 /**

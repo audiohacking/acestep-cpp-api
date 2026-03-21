@@ -13,7 +13,7 @@ import { normalizeDawBody } from "./dawNormalize";
 import { modelInventoryData, initModelResponse } from "./dawCompat";
 import { tryServeDawStatic, dawDistRoot } from "./dawStatic";
 import { parseFormBoolean } from "./parseBool";
-import { isPathWithin } from "./paths";
+import { isPathWithin, removePathIfUnder, sweepEmptyDirsInTmp } from "./paths";
 import { repaintSnapshot } from "./repaintLog";
 
 const AUDIO_PATH_PREFIX = "/";
@@ -288,65 +288,74 @@ async function handle(req: Request): Promise<Response> {
 
     const taskId = generateTaskId();
     const jobDir = join(config.tmpDir, taskId);
-    await mkdir(jobDir, { recursive: true });
-
-    let body: Record<string, unknown>;
+    /** If we return before enqueue, the worker never runs — remove jobDir so storage/tmp does not fill with empty session dirs. */
+    let enqueued = false;
     try {
-      body = await parseBody(req, jobDir);
-    } catch (e) {
-      if (e instanceof Error && e.message === "invalid_json") {
-        return detailRes("Invalid JSON body", 400);
+      await mkdir(jobDir, { recursive: true });
+
+      let body: Record<string, unknown>;
+      try {
+        body = await parseBody(req, jobDir);
+      } catch (e) {
+        if (e instanceof Error && e.message === "invalid_json") {
+          return detailRes("Invalid JSON body", 400);
+        }
+        throw e;
       }
-      throw e;
-    }
 
-    const incomingRepaint = repaintSnapshot(body);
-    body = normalizeRepaintingBounds(normalizeDawBody(mergeMetadata(body)));
-    const afterNormRepaint = repaintSnapshot(body);
-    const ttAfterNorm = getTaskType(body);
-    if (ttAfterNorm === "repaint" || ttAfterNorm === "lego") {
-      console.log(
-        `[acestep-api] release_task ${taskId} task_type=${ttAfterNorm} repainting_trace incoming=${JSON.stringify(incomingRepaint)} after_normalize=${JSON.stringify(afterNormRepaint)}`
-      );
-    }
-    const authErr2 = requireAuth(req.headers.get("Authorization"), body.ai_token as string);
-    if (authErr2) return authErr2;
+      const incomingRepaint = repaintSnapshot(body);
+      body = normalizeRepaintingBounds(normalizeDawBody(mergeMetadata(body)));
+      const afterNormRepaint = repaintSnapshot(body);
+      const ttAfterNorm = getTaskType(body);
+      if (ttAfterNorm === "repaint" || ttAfterNorm === "lego") {
+        console.log(
+          `[acestep-api] release_task ${taskId} task_type=${ttAfterNorm} repainting_trace incoming=${JSON.stringify(incomingRepaint)} after_normalize=${JSON.stringify(afterNormRepaint)}`
+        );
+      }
+      const authErr2 = requireAuth(req.headers.get("Authorization"), body.ai_token as string);
+      if (authErr2) return authErr2;
 
-    const taskTypeEarly = getTaskType(body);
-    if (taskTypeEarly === "stem_separation") {
-      return detailRes(
-        "task_type stem_separation is not supported by acestep-cpp-api (requires full ACE-Step Python server)",
-        501
-      );
-    }
+      const taskTypeEarly = getTaskType(body);
+      if (taskTypeEarly === "stem_separation") {
+        return detailRes(
+          "task_type stem_separation is not supported by acestep-cpp-api (requires full ACE-Step Python server)",
+          501
+        );
+      }
 
-    const sampleMode = parseFormBoolean(body.sample_mode ?? body.sampleMode, false);
-    if (!hasTextPrompt(body) && !sampleMode) {
-      return detailRes("prompt, caption, or sample_query is required (or enable sample_mode)", 400);
-    }
+      const sampleMode = parseFormBoolean(body.sample_mode ?? body.sampleMode, false);
+      if (!hasTextPrompt(body) && !sampleMode) {
+        return detailRes("prompt, caption, or sample_query is required (or enable sample_mode)", 400);
+      }
 
-    const taskType = getTaskType(body);
-    if (["cover", "repaint", "lego"].includes(taskType) && !hasReferenceOrSourceAudio(body)) {
-      return detailRes(
-        `task_type "${taskType}" requires reference or source audio: upload reference_audio/ref_audio or src_audio/ctx_audio (multipart), or set reference_audio_path/src_audio_path (JSON)`,
-        400
-      );
-    }
+      const taskType = getTaskType(body);
+      if (["cover", "repaint", "lego"].includes(taskType) && !hasReferenceOrSourceAudio(body)) {
+        return detailRes(
+          `task_type "${taskType}" requires reference or source audio: upload reference_audio/ref_audio or src_audio/ctx_audio (multipart), or set reference_audio_path/src_audio_path (JSON)`,
+          400
+        );
+      }
 
-    const audioFmt = String(body.audio_format ?? body.audioFormat ?? "mp3").toLowerCase();
-    if (audioFmt === "flac") {
-      return detailRes("audio_format flac is not supported by acestep.cpp; use mp3 or wav", 415);
-    }
+      const audioFmt = String(body.audio_format ?? body.audioFormat ?? "mp3").toLowerCase();
+      if (audioFmt === "flac") {
+        return detailRes("audio_format flac is not supported by acestep.cpp; use mp3 or wav", 415);
+      }
 
-    const result = queue.enqueue(taskId, body);
-    if (!result.ok) {
-      return result.error?.includes("full") ? detailRes("Queue full", 429) : detailRes(result.error ?? "Bad request", 400);
+      const result = queue.enqueue(taskId, body);
+      if (!result.ok) {
+        return result.error?.includes("full") ? detailRes("Queue full", 429) : detailRes(result.error ?? "Bad request", 400);
+      }
+      enqueued = true;
+      return jsonRes({
+        task_id: taskId,
+        status: "queued",
+        queue_position: result.position,
+      });
+    } finally {
+      if (!enqueued) {
+        await removePathIfUnder(jobDir, config.tmpDir);
+      }
     }
-    return jsonRes({
-      task_id: taskId,
-      status: "queued",
-      queue_position: result.position,
-    });
   }
 
   if (path === "/query_result" && req.method === "POST") {
@@ -442,6 +451,9 @@ async function handle(req: Request): Promise<Response> {
 
   return detailRes("Not Found", 404);
 }
+
+await mkdir(config.tmpDir, { recursive: true });
+await sweepEmptyDirsInTmp(config.tmpDir);
 
 const server = Bun.serve({
   hostname: config.host,

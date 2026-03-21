@@ -176,6 +176,15 @@ bun run start
 
 Add **`ACESTEP_*_MODEL`** overrides only if a file is not detected. For lego, ensure a **`*v15-base*.gguf`** is in that folder (or map it — see [Models directory](#models-directory-always-via-env)).
 
+## Storage (temp + audio)
+
+| Env | Default | Purpose |
+|-----|---------|---------|
+| **`ACESTEP_TMPDIR`** | `./storage/tmp` | Per-task working directory for uploads, `request.json`, and ace-lm / ace-synth output before files move to audio storage. |
+| **`ACESTEP_AUDIO_STORAGE`** | `./storage/audio` | Final generated audio served by `GET /v1/audio`. |
+
+**Cleanup:** Each job folder under the temp dir is **deleted after the pipeline finishes** (success or failure). If `/release_task` **rejects the request before the task is queued** (auth, validation, queue full), the session folder is removed as well so empty dirs do not accumulate. On **server startup**, any **empty** immediate subdirectories under `ACESTEP_TMPDIR` are removed (fixes leftovers from older builds).
+
 ## Build
 
 ```bash

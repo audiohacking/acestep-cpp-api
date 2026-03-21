@@ -1,13 +1,18 @@
 import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { existsSync, mkdtempSync } from "fs";
+import { mkdir, writeFile, rm } from "fs/promises";
 import {
   resolveModelFile,
   resolveReferenceAudioPath,
   toAbsolutePath,
   getResourceRoot,
   isPathWithin,
+  removePathIfUnder,
+  sweepEmptyDirsInTmp,
 } from "../src/paths";
-import { isAbsolute, resolve } from "path";
+import { isAbsolute, join, resolve } from "path";
 import path from "path";
+import { tmpdir } from "os";
 
 describe("resolveModelFile", () => {
   const saved: Record<string, string | undefined> = {};
@@ -117,5 +122,40 @@ describe("isPathWithin", () => {
     // resolve("./storage/audio/file.mp3") should land inside resolve("./storage/audio")
     expect(isPathWithin("./storage/audio/file.mp3", "./storage/audio")).toBe(true);
     expect(isPathWithin("./storage/other/file.mp3", "./storage/audio")).toBe(false);
+  });
+});
+
+describe("removePathIfUnder", () => {
+  test("removes dir under parent", async () => {
+    const root = mkdtempSync(join(tmpdir(), "acestep-path-test-"));
+    const job = join(root, "jobid");
+    await mkdir(job, { recursive: true });
+    await writeFile(join(job, "f.txt"), "x");
+    await removePathIfUnder(job, root);
+    expect(existsSync(job)).toBe(false);
+    await rm(root, { recursive: true, force: true }).catch(() => {});
+  });
+
+  test("does not remove path outside parent", async () => {
+    const root = mkdtempSync(join(tmpdir(), "acestep-path-test-"));
+    const outside = mkdtempSync(join(tmpdir(), "acestep-outside-"));
+    await writeFile(join(outside, "keep.txt"), "x");
+    await removePathIfUnder(outside, root);
+    expect(existsSync(join(outside, "keep.txt"))).toBe(true);
+    await rm(root, { recursive: true, force: true }).catch(() => {});
+    await rm(outside, { recursive: true, force: true }).catch(() => {});
+  });
+});
+
+describe("sweepEmptyDirsInTmp", () => {
+  test("removes only empty immediate children", async () => {
+    const root = mkdtempSync(join(tmpdir(), "acestep-sweep-"));
+    await mkdir(join(root, "emptydir"), { recursive: true });
+    await mkdir(join(root, "hasfiles"), { recursive: true });
+    await writeFile(join(root, "hasfiles", "a.txt"), "x");
+    await sweepEmptyDirsInTmp(root);
+    expect(existsSync(join(root, "emptydir"))).toBe(false);
+    expect(existsSync(join(root, "hasfiles", "a.txt"))).toBe(true);
+    await rm(root, { recursive: true, force: true }).catch(() => {});
   });
 });

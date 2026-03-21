@@ -1,11 +1,11 @@
 import { randomUUID } from "crypto";
-import { mkdir, writeFile, rename, rm, readdir, readFile } from "fs/promises";
+import { mkdir, writeFile, rename, readdir, readFile } from "fs/promises";
 import { join, resolve } from "path";
 import { config } from "./config";
 import * as store from "./store";
 import { mergeMetadata } from "./normalize";
 import { parseFormBoolean } from "./parseBool";
-import { resolveModelFile, resolveReferenceAudioPath, toAbsolutePath, isPathWithin } from "./paths";
+import { resolveModelFile, resolveReferenceAudioPath, toAbsolutePath, isPathWithin, removePathIfUnder } from "./paths";
 import { applySegmentTargetDuration, clampRepaintingToSourceAudio } from "./repaintClamp";
 
 /** API body (snake_case / camelCase) -> acestep.cpp request JSON. */
@@ -437,7 +437,7 @@ export async function runPipeline(taskId: string): Promise<void> {
     store.setTaskFailed(taskId, msg, JSON.stringify([failItem]));
   } finally {
     store.recordJobDuration(Date.now() - started);
-    await rm(jobDir, { recursive: true, force: true }).catch(() => {});
+    await removePathIfUnder(jobDir, config.tmpDir);
   }
 }
 
