@@ -2,6 +2,44 @@
 
 [ACE-Step 1.5 HTTP API](https://github.com/ace-step/ACE-Step-1.5/blob/main/docs/en/API.md) proxy backed by [acestep.cpp](https://github.com/audiohacking/acestep.cpp) (`ace-lm` + `ace-synth`). Built with **[Bun](https://bun.sh)**.
 
+## ACE-Step-DAW (submodule + same-origin UI)
+
+This repo includes **[ACE-Step-DAW](https://github.com/ace-step/ACE-Step-DAW)** as a **git submodule** at `ACE-Step-DAW/`.
+
+Clone with submodules:
+
+```bash
+git clone --recurse-submodules <repo-url>
+# or after clone:
+git submodule update --init --recursive
+```
+
+**Demo (DAW UI + API):** point **`ACESTEP_MODELS_DIR`** at the folder that contains your GGUF files, set the usual model filenames (same as [Models directory](#models-directory-always-via-env) below), bundle binaries once, build the DAW, then start:
+
+```bash
+export ACESTEP_MODELS_DIR="$HOME/models/acestep"
+export ACESTEP_LM_MODEL=acestep-5Hz-lm-4B-Q8_0.gguf
+export ACESTEP_EMBEDDING_MODEL=Qwen3-Embedding-0.6B-Q8_0.gguf
+export ACESTEP_DIT_MODEL=acestep-v15-turbo-Q8_0.gguf
+export ACESTEP_VAE_MODEL=vae-BF16.gguf
+bun run bundle:acestep   # once per machine: fetch ace-lm / ace-synth
+bun run daw:build
+bun run start
+# Open http://127.0.0.1:<port>/  (default port from env / config)
+```
+
+Static files are served from `ACE-Step-DAW/dist` unless you override **`ACESTEP_DAW_DIST`**.
+
+The DAW’s production client calls **`/api/...`**. This server accepts the **same routes with or without the `/api` prefix** (e.g. `/api/health` and `/health` both work), so you can use the built UI on the **same origin** without Vite’s dev proxy.
+
+Optional: set backend URL in the DAW to **`http://127.0.0.1:<port>`** (no `/api`) in Settings / `localStorage['ace-step-daw-backend-url']` — then requests go to `/release_task`, `/health`, etc. directly.
+
+| Env | Purpose |
+|-----|---------|
+| **`ACESTEP_DAW_DIST`** | Absolute path to a Vite `dist/` folder (defaults to `<app-root>/ACE-Step-DAW/dist`) |
+
+**Not supported here:** `task_type: stem_separation` (returns **501** — needs the full Python ACE-Step stack). **`/format_input`** / **`/create_random_sample`** remain stubs for API shape compatibility.
+
 CLI usage matches the upstream [acestep.cpp README](https://github.com/audiohacking/acestep.cpp/blob/master/README.md): **MP3 by default** (128 kbps, overridable), **`--wav`** for stereo 48 kHz WAV, plus optional **`--lora`**, **`--lora-scale`**, **`--vae-chunk`**, **`--vae-overlap`**, **`--mp3-bitrate`**.
 
 ## Bundled acestep.cpp binaries (v0.0.3)
@@ -55,13 +93,15 @@ Per-request `lm_model_path` and **`ACESTEP_MODEL_MAP`** values use the same reso
 ```bash
 bun install
 bun run bundle:acestep   # once: fetch v0.0.3 binaries for this machine
-export ACESTEP_MODELS_DIR=...
-export ACESTEP_LM_MODEL=...
-export ACESTEP_EMBEDDING_MODEL=...
-export ACESTEP_DIT_MODEL=...
-export ACESTEP_VAE_MODEL=...
+export ACESTEP_MODELS_DIR="$HOME/models/acestep"
+export ACESTEP_LM_MODEL=acestep-5Hz-lm-4B-Q8_0.gguf
+export ACESTEP_EMBEDDING_MODEL=Qwen3-Embedding-0.6B-Q8_0.gguf
+export ACESTEP_DIT_MODEL=acestep-v15-turbo-Q8_0.gguf
+export ACESTEP_VAE_MODEL=vae-BF16.gguf
 bun run start
 ```
+
+Change **`ACESTEP_MODELS_DIR`** to your real models directory; filenames must exist under that path (or use absolute paths in the `ACESTEP_*_MODEL` vars per [Models directory](#models-directory-always-via-env)).
 
 ## Build
 

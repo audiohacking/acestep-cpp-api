@@ -55,8 +55,13 @@ export function apiToRequestJson(body: Record<string, unknown>): Record<string, 
         : body.repaintingEnd != null
           ? num(body.repaintingEnd, -1)
           : -1,
-    lego: str(body.lego ?? ""),
+    lego: str(body.lego ?? body.track_name ?? body.trackName ?? ""),
   };
+
+  const instr = body.instruction;
+  if (typeof instr === "string" && instr.trim()) {
+    req.instruction = instr.trim();
+  }
 
   const desc = body.sample_query ?? body.sampleQuery ?? body.description ?? body.desc;
   if (desc) req.caption = str(desc);
